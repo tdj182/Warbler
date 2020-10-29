@@ -5,7 +5,7 @@ from flask_debugtoolbar import DebugToolbarExtension
 from sqlalchemy.exc import IntegrityError
 
 from forms import UserAddForm, LoginForm, MessageForm, EditUserForm
-from models import db, connect_db, User, Message
+from models import db, connect_db, User, Message, Likes
 
 CURR_USER_KEY = "curr_user"
 
@@ -212,6 +212,34 @@ def stop_following(follow_id):
 
     return redirect(f"/users/{g.user.id}/following")
 
+@app.route('/users/<int:user_id>/likes')
+def users_likes(user_id):
+    """Show list of likes by this user."""
+
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+        return redirect("/")
+
+    user = User.query.get_or_404(user_id)
+    return render_template('users/likes.html', user=user)
+
+@app.route('/users/add_like/<int:msg_id>', methods=['POST'])
+def add_like(msg_id):
+    
+    liked_msg = Message.query.get_or_404(msg_id)
+    if not g.user:
+        flash("Access unauthorized.", "danger")
+    elif liked_msg in g.user.likes:
+        g.user.likes.remove(liked_msg)
+        db.session.commit()
+        flash("Unliked message", "primary")
+    else:
+        g.user.likes.append(liked_msg)
+        db.session.commit()
+        flash("Liked message", "primary")
+
+    
+    return redirect('/')
 
 @app.route('/users/profile', methods=["GET", "POST"])
 def profile():
@@ -322,10 +350,11 @@ def homepage():
     - logged in: 100 most recent messages of followed_users
     """
     
-    # Get all ids of users that the logged in user follows
-    following_user_ids = [user.id for user in g.user.following]
-    following_user_ids.append(g.user.id)
+
     if g.user:
+        # Get all ids of users that the logged in user follows
+        following_user_ids = [user.id for user in g.user.following]
+        following_user_ids.append(g.user.id)
         messages = (Message
                     .query
                     .filter(Message.user_id.in_(following_user_ids))
