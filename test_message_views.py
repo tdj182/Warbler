@@ -39,8 +39,9 @@ class MessageViewTestCase(TestCase):
     def setUp(self):
         """Create test client, add sample data."""
 
-        User.query.delete()
-        Message.query.delete()
+        db.drop_all()
+        db.create_all()
+
 
         self.client = app.test_client()
 
@@ -51,7 +52,7 @@ class MessageViewTestCase(TestCase):
 
         db.session.commit()
 
-    def test_add_message(self):
+    def test_add_delete_message(self):
         """Can use add a message?"""
 
         # Since we need to change the session to mimic logging in,
@@ -71,3 +72,23 @@ class MessageViewTestCase(TestCase):
 
             msg = Message.query.one()
             self.assertEqual(msg.text, "Hello")
+
+            res = c.post(f'/messages/{msg.id}/delete', follow_redirects=True)
+            msgs = Message.query.all()
+            self.assertEqual(len(msgs), 0)
+
+    def test_add_not_logged_in(self):
+        with self.client as c:
+            res = c.post("/messages/new", data={"text": "test"}, follow_redirects=True)
+
+            self.assertEqual(res.status_code, 200)
+            self.assertIn("unauthorized", str(res.data))
+
+    def test_get_invalid_msg(self):
+        with self.client as c:
+            with c.session_transaction() as sess:
+                sess[CURR_USER_KEY] = self.testuser.id
+            
+            res = c.get('/messages/11111111111')
+
+            self.assertEqual(res.status_code, 404)
